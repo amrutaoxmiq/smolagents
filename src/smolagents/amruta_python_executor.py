@@ -24,7 +24,7 @@ def setup_venv(requirements, venv_name=None):
         str: Path to the created/existing virtual environment
     """
     # Validate requirements
-    if not requirements or not isinstance(requirements, list):
+    if not isinstance(requirements, list):
         print("Error: Requirements must be a non-empty list of package names!")
         sys.exit(1)
     
@@ -56,9 +56,10 @@ def setup_venv(requirements, venv_name=None):
      # Install requirements
     print(f"Installing packages: {', '.join(requirements)}...")
     try:
-        # Install each package directly
-        subprocess.run([pip_exe, "install"] + requirements, check=True)
-        print("Package installation completed successfully!")
+        if len(requirements) > 0:
+            # Install each package directly
+            subprocess.run([pip_exe, "install"] + requirements, check=True)
+            print("Package installation completed successfully!")
     except subprocess.CalledProcessError:
         print("Failed to install packages!")
         sys.exit(1)

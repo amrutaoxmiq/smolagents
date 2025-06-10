@@ -236,6 +236,30 @@ def parse_code_blobs(text: str) -> str:
         ).strip()
     )
 
+def parse_requirements_from_text(text: str) -> list[str]:
+        """
+        Parse requirements from model output text.
+        Looks for patterns like:
+        requirements = ['requirement1', 'requirement2']
+        requirements: ['requirement1', 'requirement2']
+        """
+        import re
+        
+        # Pattern to match requirements = [...] or requirements: [...]
+        pattern = r'requirements\s*[=:]\s*\[(.*?)\]'
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        
+        if not match:
+            return []
+        
+        requirements_str = match.group(1)
+        
+        # Extract quoted strings from the requirements list
+        # Handles both single and double quotes
+        req_pattern = r'["\']([^"\']+)["\']'
+        requirements = re.findall(req_pattern, requirements_str)
+        
+        return requirements
 
 MAX_LENGTH_TRUNCATE_CONTENT = 20000
 

@@ -89,6 +89,7 @@ from .utils import (
     is_valid_name,
     make_init_file,
     parse_code_blobs,
+    parse_requirements_from_text,
     truncate_content,
 )
 
@@ -1511,32 +1512,6 @@ class CodeAgent(MultiStepAgent):
             },
         )
         return system_prompt
-    
-
-    def parse_requirements_from_text(text: str) -> list[str]:
-        """
-        Parse requirements from model output text.
-        Looks for patterns like:
-        requirements = ['requirement1', 'requirement2']
-        requirements: ['requirement1', 'requirement2']
-        """
-        import re
-        
-        # Pattern to match requirements = [...] or requirements: [...]
-        pattern = r'requirements\s*[=:]\s*\[(.*?)\]'
-        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
-        
-        if not match:
-            return []
-        
-        requirements_str = match.group(1)
-        
-        # Extract quoted strings from the requirements list
-        # Handles both single and double quotes
-        req_pattern = r'["\']([^"\']+)["\']'
-        requirements = re.findall(req_pattern, requirements_str)
-        
-        return requirements
 
     def _step_stream(self, memory_step: ActionStep) -> Generator[ChatMessageStreamDelta | FinalOutput]:
         """
