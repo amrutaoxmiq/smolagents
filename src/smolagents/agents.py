@@ -48,6 +48,7 @@ if TYPE_CHECKING:
 from .agent_types import AgentAudio, AgentImage, handle_agent_output_types
 from .default_tools import TOOL_MAPPING, FinalAnswerTool
 from .local_python_executor import BASE_BUILTIN_MODULES, LocalPythonExecutor, PythonExecutor, fix_final_answer_code
+from .amruta_python_executor import AmrutaPythonExecutor
 from .memory import (
     ActionStep,
     AgentMemory,
@@ -1489,6 +1490,10 @@ class CodeAgent(MultiStepAgent):
                     self.additional_authorized_imports,
                     **{"max_print_outputs_length": self.max_print_outputs_length} | self.executor_kwargs,
                 )
+            case "amruta":
+                print(f"\n\n**SELF.EXECUTOR_KWARGS: ", **self.executor_kwargs)
+                print("\n\n")
+                return AmrutaPythonExecutor(**self.executor_kwargs)
             case _:  # if applicable
                 raise ValueError(f"Unsupported executor type: {self.executor_type}")
 
@@ -1506,6 +1511,32 @@ class CodeAgent(MultiStepAgent):
             },
         )
         return system_prompt
+    
+
+    def parse_requirements_from_text(text: str) -> list[str]:
+        """
+        Parse requirements from model output text.
+        Looks for patterns like:
+        requirements = ['requirement1', 'requirement2']
+        requirements: ['requirement1', 'requirement2']
+        """
+        import re
+        
+        # Pattern to match requirements = [...] or requirements: [...]
+        pattern = r'requirements\s*[=:]\s*\[(.*?)\]'
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        
+        if not match:
+            return []
+        
+        requirements_str = match.group(1)
+        
+        # Extract quoted strings from the requirements list
+        # Handles both single and double quotes
+        req_pattern = r'["\']([^"\']+)["\']'
+        requirements = re.findall(req_pattern, requirements_str)
+        
+        return requirements
 
     def _step_stream(self, memory_step: ActionStep) -> Generator[ChatMessageStreamDelta | FinalOutput]:
         """
@@ -1578,10 +1609,13 @@ class CodeAgent(MultiStepAgent):
         ### Parse output ###
         try:
             if self._use_structured_outputs_internally:
-                code_action = json.loads(output_text)["code"]
+                parsed_output = json.loads(output_text)
+                code_action = parsed_output["code"]
                 code_action = extract_code_from_text(code_action) or code_action
+                requirements = parsed_output.get("requirements", [])
             else:
                 code_action = parse_code_blobs(output_text)
+                requirements = parse_requirements_from_text(output_text)
             code_action = fix_final_answer_code(code_action)
         except Exception as e:
             error_msg = f"Error in code parsing:\n{e}\nMake sure to provide correct code blobs."
@@ -1597,9 +1631,15 @@ class CodeAgent(MultiStepAgent):
 
         ### Execute action ###
         self.logger.log_code(title="Executing parsed code:", content=code_action, level=LogLevel.INFO)
+
+        # Log requirements if any were found
+        if requirements:
+            self.logger.log(f"Requirements: {requirements}", level=LogLevel.INFO)
+
+
         is_final_answer = False
         try:
-            output, execution_logs, is_final_answer = self.python_executor(code_action)
+            output, execution_logs, is_final_answer = self.python_executor(code_action, requirements)
             execution_outputs_console = []
             if len(execution_logs) > 0:
                 execution_outputs_console += [
