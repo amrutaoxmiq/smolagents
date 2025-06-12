@@ -1440,7 +1440,7 @@ class CodeAgent(MultiStepAgent):
         use_structured_outputs_internally: bool = False,
         grammar: dict[str, str] | None = None,
         **kwargs,
-    ):
+    ):  
         self.additional_authorized_imports = additional_authorized_imports if additional_authorized_imports else []
         self.authorized_imports = sorted(set(BASE_BUILTIN_MODULES) | set(self.additional_authorized_imports))
         self.max_print_outputs_length = max_print_outputs_length
@@ -1451,7 +1451,7 @@ class CodeAgent(MultiStepAgent):
             )
         else:
             prompt_templates = prompt_templates or yaml.safe_load(
-                importlib.resources.files("smolagents.prompts").joinpath("code_agent.yaml").read_text()
+                importlib.resources.files("smolagents.prompts").joinpath("code_agent_copy.yaml").read_text()
             )
         if grammar and use_structured_outputs_internally:
             raise ValueError("You cannot use 'grammar' and 'use_structured_outputs_internally' at the same time.")
@@ -1587,10 +1587,12 @@ class CodeAgent(MultiStepAgent):
                 parsed_output = json.loads(output_text)
                 code_action = parsed_output["code"]
                 code_action = extract_code_from_text(code_action) or code_action
-                requirements = parsed_output.get("requirements", [])
             else:
                 code_action = parse_code_blobs(output_text)
-                requirements = parse_requirements_from_text(output_text)
+
+            print("\n\nINITIAL_CODE_ACTION\n:", code_action)
+
+
             code_action = fix_final_answer_code(code_action)
         except Exception as e:
             error_msg = f"Error in code parsing:\n{e}\nMake sure to provide correct code blobs."
@@ -1607,16 +1609,12 @@ class CodeAgent(MultiStepAgent):
         ### Execute action ###
         self.logger.log_code(title="Executing parsed code:", content=code_action, level=LogLevel.INFO)
 
-        # Log requirements if any were found
-        if requirements:
-            self.logger.log(f"Requirements: {requirements}", level=LogLevel.INFO)
-
 
         is_final_answer = False
         try:
-            output, execution_logs, is_final_answer = self.python_executor(code_action, requirements)
+            output, execution_logs, is_final_answer = self.python_executor(code_action)
             execution_outputs_console = []
-            if len(execution_logs) > 0:
+            if execution_logs is not None and len(execution_logs) > 0:
                 execution_outputs_console += [
                     Text("Execution logs:", style="bold"),
                     Text(execution_logs),
@@ -1641,6 +1639,12 @@ class CodeAgent(MultiStepAgent):
             raise AgentExecutionError(error_msg, self.logger)
 
         truncated_output = truncate_content(str(output))
+        print("\n\nFINAL_ANSWER:\n", is_final_answer)
+        print("\nOUTPUT:\n", output, "\n")
+        print("\n\nTRUNCATED_OUTPUT:\n", truncated_output, "\n\n")
+
+
+
         observation += "Last output from code snippet:\n" + truncated_output
         memory_step.observations = observation
 
